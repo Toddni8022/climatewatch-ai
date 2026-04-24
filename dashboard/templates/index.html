@@ -199,7 +199,7 @@
             margin-top: 18px;
         }
 
-        .panel dl > div {
+        .panel div {
             display: flex;
             align-items: baseline;
             justify-content: space-between;
@@ -208,66 +208,9 @@
             padding-bottom: 12px;
         }
 
-        .panel dl > div:last-child {
+        .panel div:last-child {
             border-bottom: 0;
             padding-bottom: 0;
-        }
-
-        .activity-list {
-            display: grid;
-            gap: 12px;
-            margin-top: 18px;
-        }
-
-        .activity-item {
-            display: grid;
-            grid-template-columns: 84px 1fr;
-            gap: 12px;
-            border-bottom: 1px solid rgba(159, 182, 179, 0.16);
-            padding-bottom: 12px;
-        }
-
-        .activity-item:last-child {
-            border-bottom: 0;
-            padding-bottom: 0;
-        }
-
-        .agent-badge {
-            align-self: start;
-            border: 1px solid rgba(114, 167, 255, 0.35);
-            border-radius: 999px;
-            color: var(--blue);
-            font-size: 0.72rem;
-            font-weight: 740;
-            line-height: 1;
-            padding: 7px 9px;
-            text-align: center;
-        }
-
-        .activity-copy {
-            display: grid;
-            gap: 4px;
-        }
-
-        .activity-copy p {
-            color: #dcebe8;
-            font-size: 0.88rem;
-            line-height: 1.45;
-        }
-
-        .activity-copy span {
-            color: var(--muted);
-            font-size: 0.72rem;
-        }
-
-        .activity-item[data-state="complete"] .agent-badge {
-            border-color: rgba(57, 208, 165, 0.35);
-            color: var(--accent);
-        }
-
-        .activity-item[data-state="error"] .agent-badge {
-            border-color: rgba(255, 118, 111, 0.4);
-            color: var(--red);
         }
 
         dt {
@@ -399,30 +342,22 @@
                 </div>
             </article>
 
-            <aside class="panel" aria-label="Agent activity">
-                <h2>Agent Activity</h2>
-                <p class="meta">Watch each refresh move from collection to analysis to dashboard publishing.</p>
-                <div class="activity-list" id="activityList">
-                    {% if data.activity %}
-                        {% for item in data.activity %}
-                            <div class="activity-item" data-state="{{ item.state }}">
-                                <span class="agent-badge">{{ item.agent }}</span>
-                                <div class="activity-copy">
-                                    <p>{{ item.message }}</p>
-                                    <span>{{ item.time }}</span>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="activity-item" data-state="waiting">
-                            <span class="agent-badge">Idle</span>
-                            <div class="activity-copy">
-                                <p>Press Refresh to watch the agents work.</p>
-                                <span>Waiting</span>
-                            </div>
-                        </div>
-                    {% endif %}
-                </div>
+            <aside class="panel" aria-label="Data freshness">
+                <h2>Refresh Health</h2>
+                <dl>
+                    <div>
+                        <dt>Status</dt>
+                        <dd data-field="status">{{ data.status | replace("_", " ") | title }}</dd>
+                    </div>
+                    <div>
+                        <dt>Cadence</dt>
+                        <dd>6 hours</dd>
+                    </div>
+                    <div>
+                        <dt>API</dt>
+                        <dd>NASA / NOAA</dd>
+                    </div>
+                </dl>
             </aside>
         </section>
 
@@ -475,8 +410,6 @@
         const refreshBtn = document.querySelector("#refreshBtn");
         const statusEl = document.querySelector("#status");
         const errorBox = document.querySelector("#errorBox");
-        const activityList = document.querySelector("#activityList");
-        let refreshPoll = null;
 
         function formatStatus(value) {
             return String(value || "unknown").replaceAll("_", " ").replace(/\b\w/g, char => char.toUpperCase());
@@ -494,49 +427,11 @@
             statusEl.textContent = formatStatus(data.status);
             errorBox.dataset.visible = data.error ? "true" : "false";
             errorBox.textContent = data.error || "";
-            renderActivity(data.activity);
-        }
-
-        function renderActivity(items = []) {
-            if (!items.length) {
-                activityList.innerHTML = `
-                    <div class="activity-item" data-state="waiting">
-                        <span class="agent-badge">Idle</span>
-                        <div class="activity-copy">
-                            <p>Press Refresh to watch the agents work.</p>
-                            <span>Waiting</span>
-                        </div>
-                    </div>
-                `;
-                return;
-            }
-
-            activityList.innerHTML = items.map(item => `
-                <div class="activity-item" data-state="${item.state || "running"}">
-                    <span class="agent-badge">${item.agent}</span>
-                    <div class="activity-copy">
-                        <p>${item.message}</p>
-                        <span>${item.time}</span>
-                    </div>
-                </div>
-            `).join("");
         }
 
         async function loadData() {
             const response = await fetch("/api/data");
-            const data = await response.json();
-            render(data);
-            return data;
-        }
-
-        async function pollRefresh() {
-            const data = await loadData();
-            if (data.status === "ready" || data.status === "error") {
-                clearInterval(refreshPoll);
-                refreshPoll = null;
-                refreshBtn.disabled = false;
-                refreshBtn.textContent = "Refresh";
-            }
+            render(await response.json());
         }
 
         refreshBtn.addEventListener("click", async () => {
@@ -544,19 +439,13 @@
             refreshBtn.textContent = "Refreshing";
             statusEl.dataset.state = "warming_up";
             statusEl.textContent = "Refreshing";
-            renderActivity([
-                {
-                    agent: "Coordinator",
-                    message: "Refresh requested. Agents are lining up their work.",
-                    state: "running",
-                    time: "Now"
-                }
-            ]);
 
             await fetch("/api/refresh", { method: "POST" });
-            clearInterval(refreshPoll);
-            refreshPoll = setInterval(pollRefresh, 650);
-            pollRefresh();
+            setTimeout(loadData, 1800);
+            setTimeout(loadData, 6500);
+
+            refreshBtn.disabled = false;
+            refreshBtn.textContent = "Refresh";
         });
 
         setInterval(loadData, 60000);
