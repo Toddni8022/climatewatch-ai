@@ -3,8 +3,9 @@ from __future__ import annotations
 import csv
 import logging
 import threading
+import time
 from contextlib import asynccontextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
@@ -19,9 +20,25 @@ from fastapi.templating import Jinja2Templates
 BASE_DIR = Path(__file__).resolve().parent
 REQUEST_TIMEOUT = 15
 REFRESH_INTERVAL_HOURS = 6
+AGENT_STEP_DELAY_SECONDS = 0.45
 
 logger = logging.getLogger("climatewatch.dashboard")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+
+def log_agent(agent: str, message: str, state: str = "running") -> None:
+    logger.info("[%s] %s", agent, message)
+    entry = {
+        "agent": agent,
+        "message": message,
+        "state": state,
+        "time": datetime.now().strftime("%I:%M:%S %p"),
+    }
+    with data_lock:
+        climate_data.activity.append(entry)
+        climate_data.activity = climate_data.activity[-20:]
+    if state == "running":
+        time.sleep(AGENT_STEP_DELAY_SECONDS)
 
 
 @dataclass
@@ -36,6 +53,7 @@ class ClimateData:
     last_updated: str = "Never"
     status: str = "warming_up"
     error: str = ""
+    activity: list[dict[str, str]] = field(default_factory=list)
 
 
 climate_data = ClimateData()
@@ -115,16 +133,45 @@ def snapshot() -> dict[str, Any]:
 
 def refresh_data() -> bool:
     if not refresh_lock.acquire(blocking=False):
-        logger.info("Refresh already running")
+        log_agent("Coordinator", "Refresh already running; skipping duplicate request")
         return False
 
     try:
-        logger.info("Refreshing climate data")
-        co2 = fetch_co2()
-        temp_year, temp_anomaly = fetch_temperature()
-        sea_year, sea_level = fetch_sea_level()
-        solar = fetch_solar()
+        with data_lock:
+            climate_data.status = "refreshing"
+            climate_data.error = ""
+            climate_data.activity = []
 
+        log_agent("Coordinator", "Starting climate intelligence refresh")
+        log_agent("Collector", "Fetching atmospheric CO2 from NOAA Mauna Loa")
+        co2 = fetch_co2()
+        log_agent("Collector", f"CO2 reading received: {co2} ppm", "complete")
+
+        log_agent("Collector", "Fetching global temperature anomaly from NASA GISS")
+        temp_year, temp_anomaly = fetch_temperature()
+        log_agent("Collector", f"Temperature reading received: {temp_anomaly} C for {temp_year}", "complete")
+
+        log_agent("Collector", "Fetching sea-level readings from the CSIRO / EPA dataset")
+        sea_year, sea_level = fetch_sea_level()
+        log_agent("Collector", f"Sea-level reading received: {sea_level} inches for {sea_year}", "complete")
+
+        log_agent("Collector", "Fetching solar irradiance from NASA POWER")
+        solar = fetch_solar()
+        log_agent("Collector", f"Solar reading received: {solar} kWh/m2/day", "complete")
+
+        log_agent(
+            "Analyst",
+            (
+                f"Readings collected: CO2 {co2} ppm; temperature {temp_anomaly} C in {temp_year}; "
+                f"sea level {sea_level} inches in {sea_year}; solar {solar} kWh/m2/day"
+            ),
+            "complete",
+        )
+        log_agent("Reporter", "Writing the plain-English climate briefing")
+        briefing = build_briefing(co2, temp_year, temp_anomaly, sea_year, sea_level, solar)
+        log_agent("Reporter", "Briefing drafted from the latest readings", "complete")
+
+        log_agent("Dashboard", "Publishing refreshed data to the web dashboard")
         with data_lock:
             climate_data.co2 = co2
             climate_data.temperature_year = temp_year
@@ -132,18 +179,27 @@ def refresh_data() -> bool:
             climate_data.sea_level_year = sea_year
             climate_data.sea_level_level = sea_level
             climate_data.solar = solar
-            climate_data.briefing = build_briefing(co2, temp_year, temp_anomaly, sea_year, sea_level, solar)
+            climate_data.briefing = briefing
             climate_data.last_updated = datetime.now().strftime("%B %d, %Y at %I:%M %p")
             climate_data.status = "ready"
             climate_data.error = ""
 
-        logger.info("Climate data refresh complete")
+        log_agent("Coordinator", "Climate data refresh complete", "complete")
         return True
     except Exception as exc:
-        logger.exception("Climate data refresh failed")
+        logger.exception("[Coordinator] Climate data refresh failed")
         with data_lock:
             climate_data.status = "error"
             climate_data.error = str(exc)
+            climate_data.activity.append(
+                {
+                    "agent": "Coordinator",
+                    "message": f"Refresh failed: {exc}",
+                    "state": "error",
+                    "time": datetime.now().strftime("%I:%M:%S %p"),
+                }
+            )
+            climate_data.activity = climate_data.activity[-20:]
         return False
     finally:
         refresh_lock.release()
