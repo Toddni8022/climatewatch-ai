@@ -1,0 +1,8 @@
+apscheduler>=3.10
+crewai>=0.102
+crewai-tools>=0.33
+fastapi>=0.115
+mcp>=1.2
+python-dotenv>=1.0
+requests>=2.32
+uvicorn[standard]>=0.34

@@ -1,40 +1,46 @@
-\# ClimateWatch AI
+# ClimateWatch AI
 
+ClimateWatch AI is a small FastAPI dashboard for live climate indicators from public NASA and NOAA data sources.
 
+## What It Shows
 
-Real-time climate intelligence platform powered by MCP, CrewAI, and NASA/NOAA APIs.
+- Atmospheric CO2 from NOAA Mauna Loa
+- Global temperature anomaly from NASA GISS
+- Global mean sea level rise from the CSIRO / EPA dataset
+- Solar irradiance from NASA POWER
+- A short plain-English climate briefing built from the latest readings
 
+## Project Structure
 
+```text
+dashboard/    FastAPI web app and Jinja dashboard
+crew/         Optional CrewAI agent workflow
+mcp_server/   MCP climate data tool server
+```
 
-\## What It Does
+## Run The Dashboard
 
-\- Pulls live CO2, temperature, sea level, and solar data from NASA and NOAA
-
-\- Routes data through a 3-agent CrewAI pipeline (collector, analyst, report writer)
-
-\- Serves findings to a FastAPI web dashboard with AI-generated daily briefings
-
-\- Auto-refreshes every 6 hours via APScheduler
-
-
-
-\## Tech Stack
-
-\- MCP SDK — custom climate data tool server
-
-\- CrewAI — multi-agent orchestration
-
-\- Claude Haiku via OpenRouter — LLM backbone
-
-\- FastAPI + Jinja2 — web dashboard
-
-\- NASA GISS, NOAA, CSIRO, NASA Power — live data sources
-
-
-
-\## Run It
-
-pip install crewai crewai-tools fastapi uvicorn jinja2 apscheduler requests python-dotenv
-
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
 uvicorn dashboard.app:app --reload
+```
 
+Open `http://127.0.0.1:8000`.
+
+The dashboard refreshes data at startup and then every six hours. You can also trigger a refresh from the web UI.
+
+## Optional CrewAI Workflow
+
+The CrewAI workflow uses OpenRouter. Create a `.env` file with:
+
+```text
+OPENROUTER_API_KEY=your_key_here
+```
+
+Then run:
+
+```bash
+python crew/crew.py
+```
