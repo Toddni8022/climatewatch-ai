@@ -1,0 +1,3 @@
+crewai>=0.102
+crewai-tools>=0.33
+python-dotenv>=1.0
