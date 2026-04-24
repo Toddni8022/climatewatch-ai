@@ -18,12 +18,22 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 BASE_DIR = Path(__file__).resolve().parent
+LOG_DIR = BASE_DIR.parent / "logs"
+LOG_FILE = LOG_DIR / "climatewatch.log"
 REQUEST_TIMEOUT = 15
 REFRESH_INTERVAL_HOURS = 6
 AGENT_STEP_DELAY_SECONDS = 0.45
 
+LOG_DIR.mkdir(exist_ok=True)
 logger = logging.getLogger("climatewatch.dashboard")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(LOG_FILE, encoding="utf-8"),
+    ],
+)
 
 
 def log_agent(agent: str, message: str, state: str = "running") -> None:
