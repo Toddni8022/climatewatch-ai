@@ -29,6 +29,12 @@ python -m uvicorn dashboard.app:app --reload --port 8000
 
 Open `http://127.0.0.1:8000`.
 
+Machine-readable endpoints:
+
+- `GET /api/data` returns the current snapshot and source status.
+- `GET /health` returns service and refresh health for deployment checks.
+- `POST /api/refresh` starts a non-blocking source refresh.
+
 The dashboard refreshes data at startup and then every six hours. You can also trigger a refresh from the web UI.
 
 If port `8000` is already busy, use another port:
@@ -60,3 +66,12 @@ python crew/crew.py
 pip install -r requirements-mcp.txt
 python mcp_server/climate_tools.py
 ```
+
+## Verification and Data Integrity
+
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+Tests mock all external sources and verify CSV parsing, malformed upstream responses, briefing wording, and atomic snapshot publication. The dashboard identifies each upstream provider; the generated briefing is a deterministic summary, not a scientific forecast. Source schemas can change, so production deployments should monitor `/health` and preserve the last known good snapshot.
