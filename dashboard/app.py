@@ -78,8 +78,15 @@ def fetch_csv_rows(url: str) -> list[dict[str, str]]:
     response.raise_for_status()
     lines = [line for line in response.text.splitlines() if line.strip() and not line.startswith("#")]
     header_index = next(
-        index for index, line in enumerate(lines) if "," in line and not line.lower().startswith("land-ocean:")
+        (
+            index
+            for index, line in enumerate(lines)
+            if "," in line and not line.lower().startswith("land-ocean:")
+        ),
+        None,
     )
+    if header_index is None:
+        raise ValueError(f"No CSV header found in response from {url}")
     text = "\n".join(lines[header_index:])
     return list(csv.DictReader(StringIO(text)))
 
@@ -124,6 +131,8 @@ def fetch_solar() -> str:
     response.raise_for_status()
     values: dict[str, float] = response.json()["properties"]["parameter"]["ALLSKY_SFC_SW_DWN"]
     valid_values = [value for value in values.values() if value != -999]
+    if not valid_values:
+        raise ValueError("NASA POWER returned no valid solar readings")
     return f"{sum(valid_values) / len(valid_values):.2f}"
 
 
@@ -131,7 +140,7 @@ def build_briefing(co2: str, temp_year: str, temp_anomaly: str, sea_year: str, s
     return (
         f"CO2 is currently {co2} ppm at NOAA Mauna Loa. "
         f"NASA GISS reports a January temperature anomaly of {temp_anomaly} C for {temp_year}. "
-        f"Global mean sea level is {sea_level} inches above the 1993 baseline as of {sea_year}. "
+        f"The CSIRO/EPA adjusted sea-level series reports {sea_level} inches for {sea_year}. "
         f"NASA POWER shows average 2024 solar irradiance near St. Louis at {solar} kWh/m2/day."
     )
 
@@ -248,6 +257,16 @@ async def dashboard(request: Request):
 @app.get("/api/data")
 async def get_data():
     return snapshot()
+
+
+@app.get("/health")
+async def health():
+    data = snapshot()
+    return {
+        "status": "ok" if data["status"] != "error" else "degraded",
+        "data_status": data["status"],
+        "last_updated": data["last_updated"],
+    }
 
 
 @app.post("/api/refresh")
