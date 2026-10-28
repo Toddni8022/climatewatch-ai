@@ -1,0 +1,6 @@
+# Versions installed in the user's successful Python 3.12 environment.
+-r requirements-mcp.txt
+crewai==1.15.33
+crewai-tools[mcp]==1.15.33
+mcp==1.30.0
+mcpadapt==0.1.20

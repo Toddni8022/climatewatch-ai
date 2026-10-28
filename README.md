@@ -69,6 +69,41 @@ python mcp_server/climate_tools.py
 
 ## Verification and Data Integrity
 
+### CrewAI-to-MCP integration smoke test
+
+`crew_mcp_test.py` launches the local MCP server over stdio using the same
+Python interpreter, discovers its tools, and gives them to a CrewAI analyst.
+The analyst is asked to retrieve atmospheric CO2, identify its source, and
+avoid inventing a measurement date. The adapter closes the server when done.
+
+This is separate from the OpenRouter workflow above. It uses CrewAI's default
+OpenAI provider and requires `OPENAI_API_KEY` in the process environment. It
+makes a paid model request and needs internet access to the data source.
+Use Python 3.12, matching the successful Windows environment:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-integration.txt
+$env:OPENAI_API_KEY = [System.Net.NetworkCredential]::new("", (Read-Host "OpenAI API key" -AsSecureString)).Password
+$env:OPENAI_MODEL_NAME = "gpt-4.1-mini"
+.\.venv\Scripts\python.exe crew_mcp_test.py
+Remove-Item Env:OPENAI_API_KEY
+```
+
+Run the script directly; it is a manual smoke test, outside the `tests/`
+directory used by pytest. Do not commit credentials or console logs. `.env`
+files and virtual environments are ignored; this script does not load `.env`.
+
+The user's earlier successful run discovered `get_co2_levels`,
+`get_temperature_anomaly`, `get_sea_level`, and `get_solar_data`, then called
+`get_co2_levels` and generated a report with 426.73 ppm. That is historical
+validation of the CO2 path only, not a current reading or validation of all
+four tools. The measurement date was unknown and freshness was not verified.
+The script was recovered from the user's original local file; the dependency
+versions above reflect that environment, rather than a complete lockfile.
+
+### Dashboard tests
+
 ```bash
 pip install -r requirements-dev.txt
 pytest -q
